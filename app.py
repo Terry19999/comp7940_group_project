@@ -27,12 +27,16 @@ config.read('config.ini')
 # MongoDB setup
 connection_string = config['DATABASE']['CONNECTION_STRING']
 db_name = config['DATABASE']['DB_NAME']
-collection_name = config['DATABASE']['COLLECTION_NAME']
+collection_name_users = config['DATABASE']['COLLECTION_NAME_USERS']
+collection_name_login_logs = config['DATABASE']['COLLECTION_NAME_LOGIN_LOGS']
+collection_name_chat = config['DATABASE']['COLLECTION_NAME_CHAT']
 
 # MongoDB connection
 client = MongoClient(connection_string)
 db = client[db_name]
-users_collection = db[collection_name]
+users_collection = db[collection_name_users]
+login_logs_collection = db[collection_name_login_logs]
+chat_collection = db[collection_name_chat]
 
 # Hashing function for passwords
 def hash_password(password):
@@ -79,17 +83,18 @@ def register(update: Update, context: CallbackContext):
         hashed_password = hash_password(password)
         
         try:
-            users_collection.insert_one({
+            login_logs_collection.insert_one({
                 "username": username,
                 "password": hashed_password,
                 "created_at": datetime.now()
             })
+            
         except Exception as e:
             update.message.reply_text(f"An error occurred: {e}")
             return
         # Log user as registered and update activity time
         chat_id = update.message.chat_id
-        logged_in_users[chat_id] = datetime.now()  # Store their last activity time
+        logged_in_users[chat_id] = {"username": username, "login_time": datetime.now()}
 
         update.message.reply_text("Registration successful! You are now logged in.")
 
@@ -113,7 +118,13 @@ def login(update: Update, context: CallbackContext):
 
     if user:
         chat_id = update.message.chat_id
-        logged_in_users[chat_id] = datetime.now()  # Update activity time
+        logged_in_users[chat_id] = {"username": username, "login_time": datetime.now()}
+        # Insert login activity into MongoDB
+        login_logs_collection.insert_one({
+            "username": username,
+            "action": "login",
+            "timestamp": datetime.now()
+        })
         update.message.reply_text(
             f"Login successful! Welcome back, {username}.\n\n"
             "You can make the most of this chatbot by using the following commands:\n"
@@ -130,7 +141,8 @@ def login(update: Update, context: CallbackContext):
 def update_activity(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     if chat_id in logged_in_users:
-        logged_in_users[chat_id] = datetime.now()  # Update activity time
+        username = logged_in_users[chat_id]["username"]
+        logged_in_users[chat_id] = {"username": username, "login_time": datetime.now()}
 
 # Middleware: Block users who are not logged in
 def require_login(func):
@@ -163,7 +175,9 @@ class HKBU_ChatGPT:
         response = requests.post(url, json=payload, headers=headers)
         if response.status_code == 200:
             data = response.json()
-            return data['choices'][0]['message']['content']
+            chatgpt_response = data['choices'][0]['message']['content']
+
+            return chatgpt_response
         else:
             return f"Error: {response.status_code}"
 
@@ -172,6 +186,7 @@ class HKBU_ChatGPT:
 def equipped_chatgpt(update, context):
     # Check if the user is logged in (enforced by require_login middleware)
     chat_id = update.message.chat_id
+    username = logged_in_users[chat_id]["username"]
     
     # Retrieve the user's message from the Telegram chat
     user_message = update.message.text
@@ -182,7 +197,26 @@ def equipped_chatgpt(update, context):
         update_activity(update, context)
         reply = chatgpt.submit(user_message)
         update.message.reply_text(reply)  # Send the response back to the user
+        # Limit the response to 30 words
+        words = reply.split()
+        if len(words) > 30:
+            limited_response = " ".join(words[:30]) + "..." 
+        else:
+            limited_response = reply
+            
+        # Record the interaction in MongoDB
+        chat_collection.insert_one({
+            "chat_id": chat_id,
+            "username": username,
+            "user_message": user_message,
+            "chatgpt_response": reply,
+            "timestamp": datetime.now()
+        })
+    except KeyError:
+        # Handle cases where the chat ID is not found in logged_in_users
+        update.message.reply_text("An error occurred: You are not logged in or your session has expired.")
     except Exception as e:
+        # Handle unexpected errors and inform the user
         update.message.reply_text(f"An error occurred while processing your request: {e}")
 
 
@@ -244,6 +278,14 @@ def logout(update: Update, context: CallbackContext):
     
     # Check if the user is logged in
     if chat_id in logged_in_users:
+        username = logged_in_users[chat_id]["username"]
+        # Insert logout activity into MongoDB
+        login_logs_collection.insert_one({
+            "username": username,
+            "action": "logout",
+            "timestamp": datetime.now()
+        })
+        
         # Remove the user from the logged_in_users dictionary
         del logged_in_users[chat_id]
         
