@@ -47,16 +47,17 @@ def check_inactive_users():
     while True:
         now = datetime.now()
         to_logout = []
-
-        # Identify users inactive for more than 3 minutes
-        for chat_id, last_activity in logged_in_users.items():
+        
+         # Identify users inactive for more than 1 minute
+        for chat_id, user_data in logged_in_users.items():
+            last_activity = user_data["last_activity"]
             if now - last_activity > timedelta(minutes=1):
                 to_logout.append(chat_id)
 
         # Log out inactive users
         for chat_id in to_logout:
             logged_in_users.pop(chat_id, None)
-            print(f"User {chat_id} logged out due to inactivity.")  # For debugging purposes
+            print(f"User {chat_id} logged out due to inactivity.")  # Debugging output
 
         # Check every minute
         time.sleep(60)
@@ -94,7 +95,7 @@ def register(update: Update, context: CallbackContext):
             return
         # Log user as registered and update activity time
         chat_id = update.message.chat_id
-        logged_in_users[chat_id] = {"username": username, "login_time": datetime.now()}
+        logged_in_users[chat_id] = {"username": username, "last_activity": datetime.now()}
 
         update.message.reply_text("Registration successful! You are now logged in.")
 
@@ -118,7 +119,7 @@ def login(update: Update, context: CallbackContext):
 
     if user:
         chat_id = update.message.chat_id
-        logged_in_users[chat_id] = {"username": username, "login_time": datetime.now()}
+        logged_in_users[chat_id] = {"username": username, "last_activity": datetime.now()}
         # Insert login activity into MongoDB
         login_logs_collection.insert_one({
             "username": username,
@@ -142,7 +143,7 @@ def update_activity(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     if chat_id in logged_in_users:
         username = logged_in_users[chat_id]["username"]
-        logged_in_users[chat_id] = {"username": username, "login_time": datetime.now()}
+        logged_in_users[chat_id] = {"username": username, "last_activity": datetime.now()}
 
 # Middleware: Block users who are not logged in
 def require_login(func):
