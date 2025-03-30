@@ -60,7 +60,7 @@ def check_inactive_users():
             print(f"User {chat_id} logged out due to inactivity.")  # Debugging output
 
         # Check every minute
-        time.sleep(60)
+        time.sleep(1000)
 
 # Register command
 def register(update: Update, context: CallbackContext):
@@ -84,7 +84,7 @@ def register(update: Update, context: CallbackContext):
         hashed_password = hash_password(password)
         
         try:
-            login_logs_collection.insert_one({
+            users_collection.insert_one({
                 "username": username,
                 "password": hashed_password,
                 "created_at": datetime.now()
@@ -131,6 +131,7 @@ def login(update: Update, context: CallbackContext):
             "You can make the most of this chatbot by using the following commands:\n"
             "- /search: Investigate suspected scams or cyber pitfalls and assess the risk levels of phone numbers, emails, or websites.\n"
             "- /tips: Get practical advice on staying safe online.\n"
+            "- /history: Get recent 10 search history\n"
             "- /logout: Securely log out of your account.\n"
             "- Free text: Chat with the bot and explore topics using ChatGPT.\n\n"
             "Feel free to explore and stay alert online!"
@@ -166,7 +167,11 @@ class HKBU_ChatGPT:
             elif type(config_) == configparser.ConfigParser:
                 self.config = config_
     def submit(self, message):
-        conversation = [{"role": "user", "content": message}]
+        system_message = {
+            "role": "system",
+            "content": "You are an expert in identifying and discussing scams. Only provide information related to scams."
+        }
+        conversation = [system_message,{"role": "user", "content": message}]
         url = f"{self.config['CHATGPT']['BASICURL']}/deployments/{self.config['CHATGPT']['MODELNAME']}/chat/completions/?api-version={self.config['CHATGPT']['APIVERSION']}"
         headers = {
             'Content-Type': 'application/json',
@@ -203,8 +208,25 @@ def equipped_chatgpt(update, context):
         if len(words) > 30:
             limited_response = " ".join(words[:30]) + "..." 
         else:
-            limited_response = reply
+            limited_response = reply        
+        # Check the count of record of the user in the collection
+        query = {"username": logged_in_users[chat_id]["username"]}
+        record_count = chat_collection.count_documents(query)
+        # If the count is greater than or equal to 10, delete the oldest record
+        if record_count >= 10:
+            # Find the oldest record based on a timestamp field
+            # Replace 'timestamp_field' with the actual field name that stores the timestamp
+            oldest_record = chat_collection.find_one(query, sort=[("_id", 1)])
             
+            if oldest_record:
+                # Delete the oldest record
+                chat_collection.delete_one({'_id': oldest_record['_id']})
+                print(f"Deleted record with _id: {oldest_record['_id']}")
+            else:
+                print("No record found to delete.")
+        else:
+            print("Record count is less than 10. No deletion performed.")
+
         # Record the interaction in MongoDB
         chat_collection.insert_one({
             "chat_id": chat_id,
@@ -220,6 +242,19 @@ def equipped_chatgpt(update, context):
         # Handle unexpected errors and inform the user
         update.message.reply_text(f"An error occurred while processing your request: {e}")
 
+@require_login
+def chatHistory(update, context: CallbackContext):
+    # Check if the user is logged in (enforced by require_login middleware)
+    chat_id = update.message.chat_id
+    try:
+        query = {"username": logged_in_users[chat_id]["username"]}
+        records = chat_collection.find(query)
+        # Extract user_message into a list and format them
+        user_messages = [f"{i+1}. {record["user_message"]}" for i, record in enumerate(records)]
+        for message in user_messages:
+            update.message.reply_text(message)
+    except Exception as e:
+        update.message.reply_text(f"An error occurred while processing your request: {e}")
 
 @require_login
 def search(update: Update, context: CallbackContext) -> None:
@@ -316,6 +351,7 @@ def main():
     # Protect all other commands and text messages with login enforcement
     dispatcher.add_handler(CommandHandler("search", require_login(search)))
     dispatcher.add_handler(CommandHandler("tips", require_login(tips)))
+    dispatcher.add_handler(CommandHandler("history", require_login(chatHistory)))
     dispatcher.add_handler(CommandHandler("logout", require_login(logout)))
     
     dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command), require_login(equipped_chatgpt)))
