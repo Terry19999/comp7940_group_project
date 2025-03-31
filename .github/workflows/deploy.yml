@@ -29,7 +29,7 @@ jobs:
           password: ${{ secrets.VM_PASSWORD }}
           script: |
             echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/your-image:latest
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/chatbot_project:latest
             docker stop chatbot || true
             docker rm chatbot || true
             docker run --name chatbot --env-file /usr/bin/envFile/env.list -d ${{ secrets.DOCKERHUB_USERNAME }}/chatbot_project:v1 
