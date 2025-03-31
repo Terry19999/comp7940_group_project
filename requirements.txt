@@ -2,3 +2,4 @@ python-telegram-bot==13.7
 requests
 urllib3==1.26.18
 pymongo
+standard-imghdr==3.13.0

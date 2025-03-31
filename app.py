@@ -25,11 +25,11 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 
 # MongoDB setup
-connection_string = config['DATABASE']['CONNECTION_STRING']
-db_name = config['DATABASE']['DB_NAME']
-collection_name_users = config['DATABASE']['COLLECTION_NAME_USERS']
-collection_name_login_logs = config['DATABASE']['COLLECTION_NAME_LOGIN_LOGS']
-collection_name_chat = config['DATABASE']['COLLECTION_NAME_CHAT']
+connection_string = (os.environ['DATABASE_CONNECTION_STRING'])
+db_name = (os.environ['DATABASE_DB_NAME'])
+collection_name_users = (os.environ['DATABASE_COLLECTION_NAME_USERS'])
+collection_name_login_logs = (os.environ['DATABASE_COLLECTION_NAME_LOGIN_LOGS'])
+collection_name_chat = (os.environ['DATABASE_COLLECTION_NAME_CHAT'])
 
 # MongoDB connection
 client = MongoClient(connection_string)
@@ -160,22 +160,21 @@ def require_login(func):
 
 # Define the HKBU_ChatGPT class
 class HKBU_ChatGPT:
-    def __init__(self, config_='./config.ini'):
-            if type(config_) == str:
-                self.config = configparser.ConfigParser()
-                self.config.read(config_)
-            elif type(config_) == configparser.ConfigParser:
-                self.config = config_
+    def __init__(self):
+        self.basic_url = os.environ.get('CHATGPT_BASICURL')
+        self.model_name = os.environ.get('CHATGPT_MODELNAME')
+        self.api_version = os.environ.get('CHATGPT_APIVERSION')
+        self.access_token = os.environ.get('CHATGPT_ACCESS_TOKEN')
     def submit(self, message):
         system_message = {
             "role": "system",
             "content": "You are an expert in identifying and discussing scams. Only provide information related to scams."
         }
         conversation = [system_message,{"role": "user", "content": message}]
-        url = f"{self.config['CHATGPT']['BASICURL']}/deployments/{self.config['CHATGPT']['MODELNAME']}/chat/completions/?api-version={self.config['CHATGPT']['APIVERSION']}"
+        url = f"{self.basic_url}/deployments/{self.model_name}/chat/completions/?api-version={self.api_version}"
         headers = {
             'Content-Type': 'application/json',
-            'api-key': self.config['CHATGPT']['ACCESS_TOKEN']
+            'api-key': self.access_token 
         }
         payload = {'messages': conversation}
         response = requests.post(url, json=payload, headers=headers)
@@ -248,11 +247,15 @@ def chatHistory(update, context: CallbackContext):
     chat_id = update.message.chat_id
     try:
         query = {"username": logged_in_users[chat_id]["username"]}
-        records = chat_collection.find(query)
-        # Extract user_message into a list and format them
-        user_messages = [f"{i+1}. {record["user_message"]}" for i, record in enumerate(records)]
-        for message in user_messages:
-            update.message.reply_text(message)
+        record_count = chat_collection.count_documents(query)
+        if record_count==0:
+            update.message.reply_text("You have no search history found.")
+        else:
+            records = chat_collection.find(query).sort("_id",1).limit(10)
+            # Extract user_message into a list and format them
+            user_messages = [f"{i+1}. {record["user_message"]}" for i, record in enumerate(records)]
+            for message in user_messages:
+                update.message.reply_text(message)
     except Exception as e:
         update.message.reply_text(f"An error occurred while processing your request: {e}")
 
@@ -338,10 +341,10 @@ def main():
     logged_in_users = {}  # Clear all users on restart
     logging.info("Server started. All users have been logged out.")
     # Initialize HKBU_ChatGPT instance
-    chatgpt = HKBU_ChatGPT(config)
+    chatgpt = HKBU_ChatGPT()
     
     # Initialize bot token from environment variable
-    updater = Updater(token=(config['TELEGRAM']['ACCESS_TOKEN']), use_context=True)
+    updater = Updater(token=(os.environ['ACCESS_TOKEN']), use_context=True)
     dispatcher = updater.dispatcher
 
     # Allow only /register and /login without authentication
