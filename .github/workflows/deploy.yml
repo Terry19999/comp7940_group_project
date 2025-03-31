@@ -1,5 +1,5 @@
 yaml
-name: Build, Push and Deploy
+name: deploy
 
 on:
   push:
@@ -24,7 +24,7 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/chatbot_project:latest
       
       - name: SSH and deploy to VM
-        uses: appleboy/ssh-action@main
+        uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VM_IP_ADDRESS }}
           username: ${{ secrets.VM_USERNAME }}
