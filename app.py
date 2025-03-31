@@ -127,7 +127,7 @@ def login(update: Update, context: CallbackContext):
             "timestamp": datetime.now()
         })
         update.message.reply_text(
-            f"Login successful! Welcome back, {username}.\n\n"
+            f"Login successful! Welcome back, {username}.\U0001f600\n\n"
             "You can make the most of this chatbot by using the following commands:\n"
             "- /search: Investigate suspected scams or cyber pitfalls and assess the risk levels of phone numbers, emails, or websites.\n"
             "- /tips: Get practical advice on staying safe online.\n"
