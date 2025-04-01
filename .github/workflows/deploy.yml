@@ -32,4 +32,4 @@ jobs:
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/chatbot_project:latest
             docker stop chatbot || true
             docker rm chatbot || true
-            docker run --name chatbot --env-file /usr/bin/envFile/env.list -d ${{ secrets.DOCKERHUB_USERNAME }}/chatbot_project:v1 
+            docker run --name chatbot --env-file /usr/bin/envFile/env.list -d ${{ secrets.DOCKERHUB_USERNAME }}/chatbot_project:latest
