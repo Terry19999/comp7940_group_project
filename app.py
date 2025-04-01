@@ -38,6 +38,14 @@ users_collection = db[collection_name_users]
 login_logs_collection = db[collection_name_login_logs]
 chat_collection = db[collection_name_chat]
 
+menu = ("You can make the most of this chatbot by using the following commands:\n"
+        "- /search: Investigate suspected scams or cyber pitfalls and assess the risk levels of phone numbers, emails, or websites.\n"
+        "- /tips: Get practical advice on staying safe online.\n"
+        "- /history: Get recent 10 search history\n"
+        "- /logout: Securely log out of your account.\n"
+        "- Free text: Chat with the bot and explore topics using ChatGPT.\n\n"
+        "Feel free to explore and stay alert online!")
+
 # Hashing function for passwords
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -97,7 +105,8 @@ def register(update: Update, context: CallbackContext):
         chat_id = update.message.chat_id
         logged_in_users[chat_id] = {"username": username, "last_activity": datetime.now()}
 
-        update.message.reply_text("Registration successful! You are now logged in.")
+        update.message.reply_text("Registration successful! You are now logged in.\n"
+        +menu)
 
 # Login command
 def login(update: Update, context: CallbackContext):
@@ -127,14 +136,8 @@ def login(update: Update, context: CallbackContext):
             "timestamp": datetime.now()
         })
         update.message.reply_text(
-            f"Login successful! Welcome back^^, {username}.😊\n\n"
-            "You can make the most of this chatbot by using the following commands:\n"
-            "- /search: Investigate suspected scams or cyber pitfalls and assess the risk levels of phone numbers, emails, or websites.\n"
-            "- /tips: Get practical advice on staying safe online.\n"
-            "- /history: Get recent 10 search history\n"
-            "- /logout: Securely log out of your account.\n"
-            "- Free text: Chat with the bot and explore topics using ChatGPT.\n\n"
-            "Feel free to explore and stay alert online!"
+            f"Login successful! Welcome back, {username}.☺️\n\n"
+            +menu
         )
     else:
         update.message.reply_text("Invalid username or password. Please try again.")
