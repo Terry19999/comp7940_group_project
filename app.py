@@ -17,13 +17,6 @@ logging.basicConfig(
     format='%(asctime)s - %(message)s'
 )
 
-# Global set to track logged-in users
-logged_in_users = {}
-
-# Load configuration
-#config = configparser.ConfigParser()
-#config.read('config.ini')
-
 # MongoDB setup
 connection_string = (os.environ['DATABASE_CONNECTION_STRING'])
 db_name = (os.environ['DATABASE_DB_NAME'])
@@ -50,6 +43,26 @@ menu = ("You can make the most of this chatbot by using the following commands�
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
+def check_login_status(update,username):
+    try:
+        countLogin = login_logs_collection.count_documents({"username":username, "status": "logged in"})
+        if countLogin >= 1:
+            return True
+        else:
+            return False
+    except Exception as e:
+        update.message.reply_text(f"An error occurred: {e}")
+        return
+
+def check_chat_id_username(update,chat_id):
+    try:
+        document = login_logs_collection.find_one({"status": "logged in", "chat_id": chat_id})
+        username = document["username"]
+        return username 
+    except Exception as e:
+        update.message.reply_text(f"An error occurred: {e}")
+        return
+
 # Function to log out inactive users
 def check_inactive_users():
     while True:
@@ -57,25 +70,25 @@ def check_inactive_users():
         to_logout = []
         
          # Identify users inactive for more than 1 minute
-        for chat_id, user_data in logged_in_users.items():
-            last_activity = user_data["last_activity"]
+        for document in login_logs_collection.find({"status": "logged in"}):
+            last_activity = document["last_activity"]
             if now - last_activity > timedelta(minutes=1):
-                to_logout.append(chat_id)
-
+                to_logout.append(document["_id"])
         # Log out inactive users
-        for chat_id in to_logout:
-            logged_in_users.pop(chat_id, None)
-            print(f"User {chat_id} logged out due to inactivity.")  # Debugging output
-
+        for _id in to_logout:
+            login_logs_collection.update_one(
+                {"_id": _id},
+                {"$set": {"status": "logged out"}}
+            )
         # Check every minute
-        time.sleep(1000)
+        time.sleep(60)
 
 # Register command
 def register(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
-    
+    username = check_chat_id_username(update,chat_id)
     # Check if the user is already logged in
-    if chat_id in logged_in_users:
+    if check_login_status(update,username):
         update.message.reply_text("You are already logged in. If you want to register a new account, please log out first.")
         return
     
@@ -103,7 +116,14 @@ def register(update: Update, context: CallbackContext):
             return
         # Log user as registered and update activity time
         chat_id = update.message.chat_id
-        logged_in_users[chat_id] = {"username": username, "last_activity": datetime.now()}
+        login_logs_collection.insert_one({
+            "username": username,
+            "chat_id": chat_id,
+            "action": "login",
+            "timestamp": datetime.now(),
+            "last_activity": datetime.now(),
+            "status": "logged in"
+        })
 
         update.message.reply_text("Registration successful! You are now logged in👏🏻\n\n"
         +menu)
@@ -111,9 +131,9 @@ def register(update: Update, context: CallbackContext):
 # Login command
 def login(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
-    
+    username = check_chat_id_username(update,chat_id)
     # Check if the user is already logged in
-    if chat_id in logged_in_users:
+    if check_login_status(username):
         update.message.reply_text("You are already logged in. No need to log in again.")
         return
     
@@ -128,12 +148,14 @@ def login(update: Update, context: CallbackContext):
 
     if user:
         chat_id = update.message.chat_id
-        logged_in_users[chat_id] = {"username": username, "last_activity": datetime.now()}
         # Insert login activity into MongoDB
         login_logs_collection.insert_one({
             "username": username,
+            "chat_id": chat_id,
             "action": "login",
-            "timestamp": datetime.now()
+            "timestamp": datetime.now(),
+            "last_activity": datetime.now(),
+            "status": "logged in"
         })
         update.message.reply_text(
             f"Login successful! Welcome back, {username}☺️\n\n"
@@ -145,15 +167,23 @@ def login(update: Update, context: CallbackContext):
 # Function: Update user's activity on any command or message
 def update_activity(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
-    if chat_id in logged_in_users:
-        username = logged_in_users[chat_id]["username"]
-        logged_in_users[chat_id] = {"username": username, "last_activity": datetime.now()}
+    username = check_chat_id_username(update,chat_id)
+    if check_login_status(username):
+        UpdateActivity = []
+        for document in login_logs_collection.find({"username": username, "status": "logged in"}):
+                UpdateActivity.append(document["_id"])
+        for _id in UpdateActivity:
+            login_logs_collection.update_one(
+                {"_id": _id},
+                {"$set": {"last_activity": datetime.now()}}
+            )
 
 # Middleware: Block users who are not logged in
 def require_login(func):
     def wrapper(update: Update, context: CallbackContext):
         chat_id = update.message.chat_id
-        if chat_id not in logged_in_users:
+        username = check_chat_id_username(update,chat_id)
+        if check_login_status(username)==False:
             update.message.reply_text(
                 "Welcome to the Suspected Scam / Cyber Pitfall chatbot! Please /register or /login to continue."
             )
@@ -194,7 +224,7 @@ class HKBU_ChatGPT:
 def equipped_chatgpt(update, context):
     # Check if the user is logged in (enforced by require_login middleware)
     chat_id = update.message.chat_id
-    username = logged_in_users[chat_id]["username"]
+    username = check_chat_id_username(chat_id)
     
     # Retrieve the user's message from the Telegram chat
     user_message = update.message.text
@@ -212,7 +242,7 @@ def equipped_chatgpt(update, context):
         else:
             limited_response = reply        
         # Check the count of record of the user in the collection
-        query = {"username": logged_in_users[chat_id]["username"]}
+        query = {"username": username}
         record_count = chat_collection.count_documents(query)
         # If the count is greater than or equal to 10, delete the oldest record
         if record_count >= 10:
@@ -248,8 +278,9 @@ def equipped_chatgpt(update, context):
 def chatHistory(update, context: CallbackContext):
     # Check if the user is logged in (enforced by require_login middleware)
     chat_id = update.message.chat_id
+    username = check_chat_id_username(chat_id)
     try:
-        query = {"username": logged_in_users[chat_id]["username"]}
+        query = {"username": username}
         record_count = chat_collection.count_documents(query)
         if record_count==0:
             update.message.reply_text("You have no search history found.")
@@ -317,19 +348,28 @@ def tips(update: Update, context: CallbackContext):
 def logout(update: Update, context: CallbackContext):
     # Extract chat_id
     chat_id = update.message.chat_id
+    username = check_chat_id_username(chat_id)
     
     # Check if the user is logged in
-    if chat_id in logged_in_users:
-        username = logged_in_users[chat_id]["username"]
+    if check_login_status(username):
         # Insert logout activity into MongoDB
         login_logs_collection.insert_one({
             "username": username,
+            "chat_id": chat_id,
             "action": "logout",
-            "timestamp": datetime.now()
+            "timestamp": datetime.now(),
+            "last_activity": datetime.now(),
+            "status": "logged out"
         })
+        Logout = []
+        for document in login_logs_collection.find({"username": username, "status": "logged in"}):
+                Logout.append(document["_id"])
+        for _id in Logout:
+            login_logs_collection.update_one(
+                {"_id": _id},
+                {"$set": {"last_activity": datetime.now(), "status":"logged out"}}
+            )
         
-        # Remove the user from the logged_in_users dictionary
-        del logged_in_users[chat_id]
         
         update.message.reply_text("You have been successfully logged out. Stay safe online!")
     else:
@@ -339,10 +379,8 @@ def logout(update: Update, context: CallbackContext):
 
 
 def main():
-    global chatgpt, logged_in_users
+    global chatgpt
     
-    logged_in_users = {}  # Clear all users on restart
-    logging.info("Server started. All users have been logged out.")
     # Initialize HKBU_ChatGPT instance
     chatgpt = HKBU_ChatGPT()
     
