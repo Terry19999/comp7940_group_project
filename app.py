@@ -185,14 +185,18 @@ def update_activity(update: Update, context: CallbackContext):
 # Middleware: Block users who are not logged in
 def require_login(func):
     def wrapper(update: Update, context: CallbackContext):
-        chat_id = update.message.chat_id
-        username = check_chat_id_username(update,chat_id)
-        if check_login_status(username)==False:
-            update.message.reply_text(
-                "Welcome to the Suspected Scam / Cyber Pitfall chatbot! Please /register or /login to continue."
-            )
+        try:
+            chat_id = update.message.chat_id
+            username = check_chat_id_username(update,chat_id)
+            if check_login_status(username)==False:
+                update.message.reply_text(
+                    "Welcome to the Suspected Scam / Cyber Pitfall chatbot! Please /register or /login to continue."
+                )
+                return
+            return func(update, context)
+        except Exception as e:
+            update.message.reply_text(f"An error occurred: {e}")
             return
-        return func(update, context)
     return wrapper
 
 # Define the HKBU_ChatGPT class
