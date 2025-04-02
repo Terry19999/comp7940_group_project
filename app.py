@@ -45,6 +45,7 @@ def hash_password(password):
 
 def check_login_status(update,username):
     try:
+        update.message.reply_text(f"debug: check_login_status")
         countLogin = login_logs_collection.count_documents({"username":username, "status": "logged in"})
         if countLogin >= 1:
             return True
@@ -56,6 +57,7 @@ def check_login_status(update,username):
 
 def check_chat_id_username(update,chat_id):
     try:
+        update.message.reply_text(f"debug: check_chat_id_username")
         countLogin = login_logs_collection.count_documents({"chat_id":chat_id, "status": "logged in"})
         if countLogin >= 1:
             document = login_logs_collection.find_one({"status": "logged in", "chat_id": chat_id})
@@ -186,6 +188,7 @@ def update_activity(update: Update, context: CallbackContext):
 def require_login(func):
     def wrapper(update: Update, context: CallbackContext):
         try:
+            update.message.reply_text(f"debug: require_login")
             chat_id = update.message.chat_id
             username = check_chat_id_username(update,chat_id)
             if check_login_status(username)==False:
