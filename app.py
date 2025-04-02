@@ -139,7 +139,7 @@ def login(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     username = check_chat_id_username(update,chat_id)
     # Check if the user is already logged in
-    if check_login_status(username):
+    if check_login_status(update,username):
         update.message.reply_text("You are already logged in. No need to log in again.")
         return
     
@@ -174,7 +174,7 @@ def login(update: Update, context: CallbackContext):
 def update_activity(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     username = check_chat_id_username(update,chat_id)
-    if check_login_status(username):
+    if check_login_status(update,username):
         UpdateActivity = []
         for document in login_logs_collection.find({"username": username, "status": "logged in"}):
                 UpdateActivity.append(document["_id"])
@@ -191,7 +191,7 @@ def require_login(func):
             update.message.reply_text(f"debug: require_login")
             chat_id = update.message.chat_id
             username = check_chat_id_username(update,chat_id)
-            if check_login_status(username)==False:
+            if check_login_status(update,username)==False:
                 update.message.reply_text(
                     "Welcome to the Suspected Scam / Cyber Pitfall chatbot! Please /register or /login to continue."
                 )
@@ -362,7 +362,7 @@ def logout(update: Update, context: CallbackContext):
     username = check_chat_id_username(chat_id)
     
     # Check if the user is logged in
-    if check_login_status(username):
+    if check_login_status(update,username):
         # Insert logout activity into MongoDB
         login_logs_collection.insert_one({
             "username": username,
