@@ -56,9 +56,13 @@ def check_login_status(update,username):
 
 def check_chat_id_username(update,chat_id):
     try:
-        document = login_logs_collection.find_one({"status": "logged in", "chat_id": chat_id})
-        username = document["username"]
-        return username 
+        countLogin = login_logs_collection.count_documents({"chat_id":chat_id, "status": "logged in"})
+        if countLogin >= 1:
+            document = login_logs_collection.find_one({"status": "logged in", "chat_id": chat_id})
+            username = document["username"]
+            return username 
+        else:
+            return
     except Exception as e:
         update.message.reply_text(f"An error occurred: {e}")
         return
