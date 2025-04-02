@@ -21,8 +21,8 @@ logging.basicConfig(
 logged_in_users = {}
 
 # Load configuration
-config = configparser.ConfigParser()
-config.read('config.ini')
+#config = configparser.ConfigParser()
+#config.read('config.ini')
 
 # MongoDB setup
 connection_string = (os.environ['DATABASE_CONNECTION_STRING'])
