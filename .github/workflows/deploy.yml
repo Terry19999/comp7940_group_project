@@ -21,12 +21,26 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/chatbot_project:latest
       
+      #update VM_1
       - name: SSH and deploy to VM
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.VM_IP_ADDRESS }}
-          username: ${{ secrets.VM_USERNAME }}
-          password: ${{ secrets.VM_PASSWORD }}
+          host: ${{ secrets.VM_1_IP_ADDRESS }}
+          username: ${{ secrets.VM_1_USERNAME }}
+          password: ${{ secrets.VM_1_PASSWORD }}
+          script: |
+            echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/chatbot_project:latest
+            docker stop chatbot || true
+            docker rm chatbot || true
+            docker run --name chatbot --env-file /usr/bin/envFile/env.list -d ${{ secrets.DOCKERHUB_USERNAME }}/chatbot_project:latest
+      #update VM_2
+      - name: SSH and deploy to VM
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VM_2_IP_ADDRESS }}
+          username: ${{ secrets.VM_2_USERNAME }}
+          password: ${{ secrets.VM_2_PASSWORD }}
           script: |
             echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/chatbot_project:latest
