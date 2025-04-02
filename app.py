@@ -45,7 +45,6 @@ def hash_password(password):
 
 def check_login_status(update,username):
     try:
-        update.message.reply_text(f"debug: check_login_status")
         countLogin = login_logs_collection.count_documents({"username":username, "status": "logged in"})
         if countLogin >= 1:
             return True
@@ -57,7 +56,6 @@ def check_login_status(update,username):
 
 def check_chat_id_username(update,chat_id):
     try:
-        update.message.reply_text(f"debug: check_chat_id_username")
         countLogin = login_logs_collection.count_documents({"chat_id":chat_id, "status": "logged in"})
         if countLogin >= 1:
             document = login_logs_collection.find_one({"status": "logged in", "chat_id": chat_id})
@@ -188,7 +186,6 @@ def update_activity(update: Update, context: CallbackContext):
 def require_login(func):
     def wrapper(update: Update, context: CallbackContext):
         try:
-            update.message.reply_text(f"debug: require_login")
             chat_id = update.message.chat_id
             username = check_chat_id_username(update,chat_id)
             if check_login_status(update,username)==False:
@@ -235,7 +232,7 @@ class HKBU_ChatGPT:
 def equipped_chatgpt(update, context):
     # Check if the user is logged in (enforced by require_login middleware)
     chat_id = update.message.chat_id
-    username = check_chat_id_username(chat_id)
+    username = check_chat_id_username(update,chat_id)
     
     # Retrieve the user's message from the Telegram chat
     user_message = update.message.text
@@ -289,7 +286,7 @@ def equipped_chatgpt(update, context):
 def chatHistory(update, context: CallbackContext):
     # Check if the user is logged in (enforced by require_login middleware)
     chat_id = update.message.chat_id
-    username = check_chat_id_username(chat_id)
+    username = check_chat_id_username(update,chat_id)
     try:
         query = {"username": username}
         record_count = chat_collection.count_documents(query)
@@ -359,7 +356,7 @@ def tips(update: Update, context: CallbackContext):
 def logout(update: Update, context: CallbackContext):
     # Extract chat_id
     chat_id = update.message.chat_id
-    username = check_chat_id_username(chat_id)
+    username = check_chat_id_username(update,chat_id)
     
     # Check if the user is logged in
     if check_login_status(update,username):
